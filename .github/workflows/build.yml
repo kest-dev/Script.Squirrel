@@ -1,0 +1,114 @@
+name: Build
+on:
+  # Build on commits pushed, except when explicitly skipped.
+  push:
+    branches-ignore:
+      - 'no-ci-**'
+      - 'skip-ci-**'
+  # Build on pull requests, except drafts.
+  pull_request:
+  # Build on a schedule to keep up with the engine changes.
+  schedule:
+    - cron: '0 0 * * 0'
+
+env:
+  # Common settings.
+  CMAKE_VERSION: 3.21.x
+  # Common paths.
+  ci_source_dir: ${{ github.workspace }}/source-code
+  ci_build_script: ./source-code/ci_build.sh
+  ci_build_dir: ${{ github.workspace }}/cmake-build
+  ci_native_sdk_dir: ${{ github.workspace }}/SDK-native
+  ci_target_sdk_dir: ${{ github.workspace }}/SDK-target
+  # Parameters for uploading binaries to GitHub
+  ci_latest_release_url: https://uploads.github.com/repos/rbfx/Core.SamplePlugin/releases/173685124/assets{?name,label}
+  ci_latest_release_id: 173685124
+
+jobs:
+  CheckSkipCI:
+    runs-on: ubuntu-20.04
+    if: |
+      !contains(github.event.head_commit.message, '[skip ci]') &&
+      !contains(github.event.pull_request.title, '[skip ci]') &&
+      !contains(github.event.head_commit.message, '[skip-ci]') &&
+      !contains(github.event.pull_request.title, '[skip-ci]')
+    steps:
+      - run: exit 0
+
+  Windows:
+    if: github.event.pull_request.draft == false
+    runs-on: windows-2022
+    needs: [CheckSkipCI]
+
+    strategy:
+      fail-fast: false
+
+    env:
+      ci_platform: windows
+      ci_target_sdk_name: rebelfork-sdk-Windows-msvc-rel-dll-x64-latest.zip
+      ci_upload_release: ${{
+                           (github.repository == 'rbfx/Core.SamplePlugin')  &&
+                           (github.ref == 'refs/heads/master')
+                         }}
+
+    steps:
+      - name: Checkout Plugin
+        uses: actions/checkout@v3
+        with:
+          path: ${{ env.ci_source_dir }}
+          fetch-depth: 1
+          submodules: true
+
+      - name: Download target SDK
+        uses: robinraju/release-downloader@v1.8
+        with:
+          repository: rbfx/rbfx
+          tag: latest
+          fileName: ${{ env.ci_target_sdk_name }}
+
+      - name: Unzip target SDK
+        run: |
+          cd ${{ github.workspace }}
+          unzip ${{ env.ci_target_sdk_name }}
+          mv ./SDK ./SDK-target
+
+      - name: Setup cmake
+        uses: jwlawson/actions-setup-cmake@v1
+        with:
+          cmake-version: '${{ env.CMAKE_VERSION }}'
+
+      - name: Dependencies
+        shell: bash
+        run: ${{ env.ci_build_script }} dependencies
+
+      - name: Generate
+        shell: bash
+        run: ${{ env.ci_build_script }} generate
+
+      - name: Build
+        shell: bash
+        run: ${{ env.ci_build_script }} build
+
+      - name: Prepare binaries
+        if: ${{ env.ci_upload_release == 'true' }}
+        shell: bash
+        run: ${{ env.ci_build_script }} prepare
+
+      - name: Zip binaries
+        if: ${{ env.ci_upload_release == 'true' }}
+        uses: TheDoctor0/zip-release@0.7.6
+        with:
+          directory: ${{ env.ci_build_dir }}/upload/
+          filename: ${{ github.workspace }}/upload.zip
+          path: '.'
+
+      - name: Release binaries
+        if: ${{ env.ci_upload_release == 'true' }}
+        uses: WebFreak001/deploy-nightly@v3.0.0
+        with:
+          upload_url: ${{ env.ci_latest_release_url }}
+          release_id: ${{ env.ci_latest_release_id }}
+          asset_path: ${{ github.workspace }}/upload.zip
+          asset_name: 'Core.SamplePlugin-${{ github.job }}-latest.zip'
+          asset_content_type: application/zip
+          max_releases: 1

@@ -1,0 +1,7 @@
+# Ignore generated projects
+build/
+.vscode/
+/cmake-build*
+
+# Ignore C# files
+/CSharp/obj/

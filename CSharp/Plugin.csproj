@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>Plugin.Core.SamplePlugin.Net</AssemblyName>
+    <OutputType>Library</OutputType>
+    <LangVersion>9.0</LangVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <BindingsSourceCode Include="$(Plugin_Core_SamplePlugin_BINARY_DIR)/Plugin.Core.SamplePluginCSharp_$(URHO3D_CSHARP_BIND_CONFIG)/*.cs" />
+  </ItemGroup>
+  <Target Name="GatherBuildFiles" BeforeTargets="BeforeCompile">
+    <CreateItem Include="$([System.IO.Directory]::GetFiles(&quot;$(Plugin_Core_SamplePlugin_BINARY_DIR)/Plugin.Core.SamplePluginCSharp_$(URHO3D_CSHARP_BIND_CONFIG)&quot;, &quot;*.cs&quot;))">
+      <Output TaskParameter="Include" ItemName="Compile" />
+    </CreateItem>
+  </Target>
+  <ItemGroup Condition=" '$(URHO3D_IS_SDK)' == 'ON' ">
+    <Reference Include="Urho3DNet">
+      <HintPath>$(URHO3D_SDK_PATH)/bin/$(Configuration)/Urho3DNet.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup Condition=" '$(URHO3D_IS_SDK)' != 'ON' ">
+    <ProjectReference Include="$(Urho3D_SOURCE_DIR)/CSharp/Urho3DNet.csproj" />
+  </ItemGroup>
+</Project>
